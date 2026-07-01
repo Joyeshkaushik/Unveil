@@ -479,6 +479,88 @@ const CustomTooltip = ({ active, payload, label }) => {
   )
 }
 
+const ScanDetailModal = ({ scan, onClose }) => {
+  if (!scan) return null
+
+  const isAI = scan.result === 'ai'
+  const confPct = Math.round((scan.confidence || 0) * 100)
+  const scoreAI = isAI ? confPct : 100 - confPct
+  const scoreHuman = isAI ? 100 - confPct : confPct
+
+  const handleExport = () => {
+    const fakeResult = {
+      result: scan.result,
+      confidence: confPct,
+      aiScore: scoreAI,
+      humanScore: scoreHuman,
+      reason: `Historical scan summary. Original input preview: ${scan.input_preview}`,
+      originalText: scan.type === 'text' || scan.type === 'url' ? scan.input_preview : null,
+      url: scan.type === 'url' ? scan.input_preview : null
+    }
+    exportScanToPDF(fakeResult, scan.type)
+  }
+
+  const verdictText = scan.result === 'ai' ? '🤖 AI Generated' : '👤 Human Made/Written'
+  const verdictColor = scan.result === 'ai' ? '#fca5a5' : '#86efac'
+
+  return (
+    <Modal onClose={onClose}>
+      <div className="uv-modal-title">Scan Details</div>
+      <div className="uv-modal-sub">Scan ID: {scan.id?.substring(0, 8) || 'N/A'}</div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 10 }}>
+        {/* Info Box */}
+        <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, padding: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div>
+              <div style={{ color: 'var(--text3)', fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>Content Type</div>
+              <div style={{ fontSize: 14, fontWeight: 700 }}>
+                {scan.type?.toUpperCase()}
+              </div>
+            </div>
+            <div>
+              <div style={{ color: 'var(--text3)', fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>Date Scanned</div>
+              <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text2)' }}>
+                {new Date(scan.created_at).toLocaleString()}
+              </div>
+            </div>
+          </div>
+
+          <div style={{ height: 1, background: 'rgba(255,255,255,0.05)', margin: '12px 0' }} />
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div>
+              <div style={{ color: 'var(--text3)', fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>Verdict</div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: verdictColor }}>
+                {verdictText}
+              </div>
+            </div>
+            <div>
+              <div style={{ color: 'var(--text3)', fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>Confidence</div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: verdictColor, fontFamily: 'JetBrains Mono, monospace' }}>
+                {confPct}%
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Input Preview Box */}
+        <div style={{ background: 'rgba(0,0,0,0.15)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 14, padding: 16 }}>
+          <div style={{ color: 'var(--text3)', fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Input Preview</div>
+          <div style={{ color: 'var(--text)', fontSize: 13.5, lineHeight: 1.6, maxHeight: 120, overflowY: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+            {scan.input_preview || 'No preview available'}
+          </div>
+        </div>
+
+        {/* Export to PDF Button */}
+        <button onClick={handleExport} className="uv-btn uv-btn-primary" style={{ width: '100%', justifyContent: 'center', borderRadius: 12, padding: '12px', marginTop: 8 }}>
+          📥 Export Scan as PDF
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
 /* ══════════ MAIN DASHBOARD ══════════ */
 export default function Dashboard() {
   const { user, logout } = useAuth()
