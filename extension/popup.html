@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { width: 300px; background: #050d14; font-family: system-ui, sans-serif; color: #e8f4f0; }
+    .header { padding: 16px 20px; border-bottom: 1px solid rgba(0,255,200,0.1); display: flex; align-items: center; justify-content: space-between; }
+    .logo { font-weight: 800; font-size: 18px; color: #00ffc8; letter-spacing: 1px; }
+    .status { padding: 20px; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #00ffc8; display: inline-block; margin-right: 6px; }
+    .section { padding: 0 20px 20px; }
+    label { display: block; color: #8899aa; font-size: 12px; margin-bottom: 6px; }
+    input { width: 100%; background: rgba(0,255,200,0.05); border: 1px solid rgba(0,255,200,0.15); border-radius: 6px; padding: 8px 12px; color: #e8f4f0; font-size: 13px; outline: none; }
+    input:focus { border-color: rgba(0,255,200,0.4); }
+    button { width: 100%; background: linear-gradient(135deg, #00ffc8, #00aaff); border: none; border-radius: 6px; padding: 10px; color: #050d14; font-weight: 700; font-size: 13px; cursor: pointer; margin-top: 8px; }
+    .logged-in { text-align: center; padding: 20px; }
+    .avatar { width: 44px; height: 44px; border-radius: 50%; background: linear-gradient(135deg, #00ffc8, #00aaff); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 18px; color: #050d14; margin: 0 auto 10px; }
+    .tip { background: rgba(0,255,200,0.05); border: 1px solid rgba(0,255,200,0.1); border-radius: 8px; padding: 12px; margin: 0 20px 20px; }
+    .tip p { color: #8899aa; font-size: 12px; line-height: 1.6; }
+    .logout { background: transparent; border: 1px solid rgba(255,107,107,0.3); color: #ff6b6b; margin-top: 10px; }
+    .error { color: #ff6b6b; font-size: 12px; margin-top: 6px; }
+    .success { color: #6bffa0; font-size: 12px; margin-top: 6px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <span class="logo">UNVEIL</span>
+    <span style="color:#8899aa;font-size:11px">AI Detector</span>
+  </div>
+
+  <div id="login-view">
+    <div class="status" style="padding-bottom:8px">
+      <p style="color:#8899aa;font-size:13px">Login to start detecting AI content on any webpage</p>
+    </div>
+    <div class="section">
+      <div style="margin-bottom:12px">
+        <label>Email</label>
+        <input type="email" id="email" placeholder="you@example.com" />
+      </div>
+      <div style="margin-bottom:4px">
+        <label>Password</label>
+        <input type="password" id="password" placeholder="••••••••" />
+      </div>
+      <div id="msg"></div>
+      <button id="login-btn">Login →</button>
+    </div>
+  </div>
+
+  <div id="loggedin-view" style="display:none">
+    <div class="logged-in">
+      <div class="avatar" id="avatar">U</div>
+      <p style="color:#e8f4f0;font-size:14px;font-weight:600" id="username">User</p>
+      <p style="color:#8899aa;font-size:12px;margin-top:2px">Logged in ✓</p>
+    </div>
+    <div class="tip">
+      <p>💡 <strong style="color:#00ffc8">How to use:</strong> Select any text on a webpage → right-click → "Check with Unveil"</p>
+    </div>
+    <div style="padding:0 20px 20px">
+      <a href="http://localhost:5173/dashboard" target="_blank" style="display:block;text-align:center;background:linear-gradient(135deg,#00ffc8,#00aaff);color:#050d14;padding:10px;border-radius:6px;font-weight:700;font-size:13px;text-decoration:none;margin-bottom:8px">Open Unveil Dashboard →</a>
+      <button class="logout" id="logout-btn">Logout</button>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
