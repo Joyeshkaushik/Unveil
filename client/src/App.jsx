@@ -1,11 +1,11 @@
 import {BrowserRouter,Routes,Route,Navigate} from 'react-router-dom'
-import { Landing } from './pages/Landing';
-import { AuthProvider,useAuth } from './context/AuthContext';
-import { Login } from './pages/Login';
-import { Signup } from './pages/Signup';
-import { Dashboard } from './pages/Dashboard';
 
-import { Detect } from './pages/Detect';
+import { AuthProvider,useAuth } from './context/AuthContext';
+import Landing from './pages/Landing'
+import Login from './pages/Login'
+import Signup from './pages/Signup'
+import Dashboard from './pages/Dashboard'
+import Detect from './pages/Detect'
 const ProtectedRoute=({children})=>{
   const {user,loading}=useAuth()
    if (loading) return (
@@ -24,7 +24,7 @@ function App(){
         <Route path="/login"  element={<Login/>}/>
          <Route path="/signup" element={<Signup />} />
         <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-           <Route path="/dashboard" element={<ProtectedRoute><Detect /></ProtectedRoute>} />
+           <Route path="/Detect" element={<ProtectedRoute><Detect /></ProtectedRoute>} />
       </Routes>
     </BrowserRouter>
     </AuthProvider>
