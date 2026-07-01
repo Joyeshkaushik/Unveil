@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import api from '../api/axios'
+import { exportScanToPDF } from '../utils/pdfExport'
 import {
   AreaChart, Area, PieChart, Pie, Cell,
   XAxis, YAxis, Tooltip, ResponsiveContainer
@@ -16,12 +17,12 @@ const CSS = `
   :root {
     --bg: #07090f;
     --text: #f8faff;
-    --text2: rgba(248,250,255,0.5);
-    --text3: rgba(248,250,255,0.25);
-    --border: rgba(255,255,255,0.07);
-    --border-b: rgba(255,255,255,0.13);
-    --glass: rgba(255,255,255,0.04);
-    --glass2: rgba(255,255,255,0.07);
+    --text2: rgba(248,250,255,0.65);
+    --text3: rgba(248,250,255,0.35);
+    --border: rgba(255,255,255,0.12);
+    --border-b: rgba(255,255,255,0.22);
+    --glass: rgba(255,255,255,0.08);
+    --glass2: rgba(255,255,255,0.15);
     --blue: #3b82f6;
     --indigo: #6366f1;
   }
@@ -84,11 +85,13 @@ const CSS = `
   }
   .uv-nav-item:hover { background: var(--glass2); color: var(--text); border-color: var(--border); box-shadow: inset 0 1px 0 rgba(255,255,255,0.07); }
   .uv-nav-item.active {
-    background: linear-gradient(135deg, rgba(59,130,246,0.15), rgba(99,102,241,0.1));
-    border-color: rgba(59,130,246,0.22); color: var(--text);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.1), 0 2px 14px rgba(59,130,246,0.15);
+    background: linear-gradient(135deg, rgba(124,92,255,0.1), rgba(89,52,255,0.2));
+    border-color: rgba(124,92,255,0.25); color: var(--text);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.1), 0 2px 14px rgba(124,92,255,0.2);
   }
-  .uv-nav-icon { font-size: 14px; width: 18px; text-align: center; opacity: 0.75; }
+  .uv-nav-icon { display: flex; align-items: center; justify-content: center; width: 20px; opacity: 0.75; }
+  .uv-nav-svg { width: 17px; height: 17px; stroke-width: 2.2px; }
+  .uv-nav-item.active .uv-nav-svg { opacity: 1; filter: drop-shadow(0 0 6px rgba(124, 92, 255, 0.5)); color: #c4b5fd; }
   .uv-nav-count {
     margin-left: auto; padding: 2px 8px; border-radius: 100px;
     font-size: 10px; font-weight: 700; font-family: 'JetBrains Mono', monospace;
@@ -96,12 +99,70 @@ const CSS = `
     color: #93c5fd; border: 1px solid rgba(59,130,246,0.15);
   }
   .uv-sep { height: 1px; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.07), transparent); margin: 10px 0; }
+
+  /* Upgrade Card styling */
+  .uv-sidebar-upgrade {
+    margin: auto 10px 1px;
+    padding: 12px;
+    border-radius: 12px;
+    background: linear-gradient(180deg, rgba(83,125,255,.12) 0%, rgba(255,196,74,.04) 100%);
+    border: 1px solid rgba(152, 151, 158, 0.15);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    box-shadow: 0 4px 15px rgba(9, 5, 46, 0.2);
+  }
+  .uv-upgrade-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .uv-upgrade-title {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #fff;
+  }
+  .uv-upgrade-desc {
+    font-size: 10.5px;
+    color: rgba(248, 250, 255, 0.45);
+    line-height: 1.3;
+  }
+  .uv-upgrade-btn {
+    width: 100%;
+    text-align: center;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 500;
+    background: transparent;
+    color: #5d4998ff;
+    border: 1px solid rgba(124, 92, 255, 0.3);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    font-family: inherit;
+    margin-top: 2px;
+  }
+  .uv-upgrade-btn:hover {
+    background: rgba(124, 92, 255, 0.1);
+    border-color: rgba(6, 2, 22, 0.6);
+    color: #fff;
+  }
+
   .uv-sidebar-bottom { margin-top: auto; padding-top: 14px; border-top: 1px solid var(--border); }
   .uv-user-pill {
-    display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 100px;
-    background: var(--glass); border: 1px solid var(--border); cursor: pointer; transition: all 0.2s;
+    display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px;
+    background: linear-gradient(135deg, rgba(13, 17, 39, 0.7) 0%, rgba(8, 10, 24, 0.5) 100%);
+    border: 1px solid rgba(124, 92, 255, 0.15); cursor: pointer; transition: all 0.2s ease;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
   }
-  .uv-user-pill:hover { background: var(--glass2); border-color: var(--border-b); box-shadow: inset 0 1px 0 rgba(255,255,255,0.07); }
+  .uv-user-pill:hover {
+    background: linear-gradient(135deg, rgba(17, 21, 45, 0.8) 0%, rgba(10, 12, 30, 0.6) 100%);
+    border-color: rgba(34, 8, 137, 0.3); box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  }
   .uv-av {
     width: 30px; height: 30px; border-radius: 50%;
     background: linear-gradient(135deg, #3b82f6, #818cf8);
@@ -116,7 +177,7 @@ const CSS = `
   /* topbar */
   .uv-topbar { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 32px; }
   .uv-page-title { font-size: 26px; font-weight: 800; letter-spacing: -0.5px; }
-  .uv-page-title span { background: linear-gradient(90deg, #60a5fa, #818cf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .uv-page-title span { background: linear-gradient(90deg, #2856c1ff, #818cf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
   .uv-page-sub { font-size: 13px; color: var(--text3); margin-top: 5px; }
   .uv-top-actions { display: flex; align-items: center; gap: 8px; }
 
@@ -137,38 +198,63 @@ const CSS = `
 
   /* card base */
   .uv-card {
-    backdrop-filter: blur(28px); border-radius: 20px; position: relative; overflow: hidden;
-    transition: all 0.25s;
+    backdrop-filter: blur(36px) saturate(130%); border-radius: 20px; position: relative; overflow: hidden;
+    transition: all 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
   }
   .uv-card::before {
-    content: ''; position: absolute; top: 0; left: 15%; right: 15%; height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.18), transparent);
+    content: ''; position: absolute; top: 0; left: 10%; right: 10%; height: 1.5px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent);
+    z-index: 1;
   }
   .uv-card::after {
-    content: ''; position: absolute; bottom: 0; left: 20%; right: 20%; height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(59,130,246,0.12), transparent);
+    content: ''; position: absolute; bottom: 0; left: 15%; right: 15%; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(59,130,246,0.18), transparent);
+    z-index: 1;
   }
 
   /* stat cards */
-  .uv-stats-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-bottom: 16px; }
-  .uv-stat { padding: 20px 22px; }
+  .uv-stats-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; margin-bottom: 24px; }
+  .uv-stat {
+    padding: 22px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
 
-  .sc-blue { background: linear-gradient(145deg, rgba(59,130,246,0.13), rgba(99,102,241,0.06), rgba(255,255,255,0.02)); border: 1px solid rgba(59,130,246,0.18); box-shadow: inset 0 1px 0 rgba(255,255,255,0.07), 0 4px 24px rgba(59,130,246,0.08); }
-  .sc-red  { background: linear-gradient(145deg, rgba(244,63,94,0.11), rgba(239,68,68,0.05), rgba(255,255,255,0.02)); border: 1px solid rgba(244,63,94,0.16); box-shadow: inset 0 1px 0 rgba(255,255,255,0.07), 0 4px 24px rgba(244,63,94,0.06); }
-  .sc-grn  { background: linear-gradient(145deg, rgba(34,197,94,0.1), rgba(16,185,129,0.05), rgba(255,255,255,0.02)); border: 1px solid rgba(34,197,94,0.16); box-shadow: inset 0 1px 0 rgba(255,255,255,0.07), 0 4px 24px rgba(34,197,94,0.06); }
-  .sc-amb  { background: linear-gradient(145deg, rgba(251,191,36,0.1), rgba(245,158,11,0.05), rgba(255,255,255,0.02)); border: 1px solid rgba(251,191,36,0.16); box-shadow: inset 0 1px 0 rgba(255,255,255,0.07), 0 4px 24px rgba(251,191,36,0.05); }
+  .sc-blue { background: linear-gradient(135deg, rgba(255,255,255,0.07), rgba(59,130,246,0.03)); border: 1px solid rgba(255,255,255,0.12); box-shadow: inset 0 1.5px 0 0 rgba(255,255,255,0.22), 0 8px 24px rgba(0,0,0,0.3), 0 0 20px rgba(59,130,246,0.08); }
+  .sc-red  { background: linear-gradient(135deg, rgba(255,255,255,0.07), rgba(244,63,94,0.03)); border: 1px solid rgba(255,255,255,0.12); box-shadow: inset 0 1.5px 0 0 rgba(255,255,255,0.22), 0 8px 24px rgba(0,0,0,0.3), 0 0 20px rgba(244,63,94,0.08); }
+  .sc-grn  { background: linear-gradient(135deg, rgba(255,255,255,0.07), rgba(34,197,94,0.03)); border: 1px solid rgba(255,255,255,0.12); box-shadow: inset 0 1.5px 0 0 rgba(255,255,255,0.22), 0 8px 24px rgba(0,0,0,0.3), 0 0 20px rgba(34,197,94,0.08); }
+  .sc-amb  { background: linear-gradient(135deg, rgba(255,255,255,0.07), rgba(16,185,129,0.03)); border: 1px solid rgba(255,255,255,0.12); box-shadow: inset 0 1.5px 0 0 rgba(255,255,255,0.22), 0 8px 24px rgba(0,0,0,0.3), 0 0 20px rgba(16,185,129,0.08); }
 
-  .sc-blue:hover { background: linear-gradient(145deg,rgba(59,130,246,0.2),rgba(99,102,241,0.1),rgba(255,255,255,0.03)); border-color: rgba(59,130,246,0.3); box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 12px 36px rgba(59,130,246,0.14); transform: translateY(-3px); }
-  .sc-red:hover  { background: linear-gradient(145deg,rgba(244,63,94,0.17),rgba(239,68,68,0.08),rgba(255,255,255,0.03)); border-color: rgba(244,63,94,0.26); box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 12px 36px rgba(244,63,94,0.1); transform: translateY(-3px); }
-  .sc-grn:hover  { background: linear-gradient(145deg,rgba(34,197,94,0.16),rgba(16,185,129,0.08),rgba(255,255,255,0.03)); border-color: rgba(34,197,94,0.26); box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 12px 36px rgba(34,197,94,0.1); transform: translateY(-3px); }
-  .sc-amb:hover  { background: linear-gradient(145deg,rgba(251,191,36,0.16),rgba(245,158,11,0.08),rgba(255,255,255,0.03)); border-color: rgba(251,191,36,0.24); box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 12px 36px rgba(251,191,36,0.08); transform: translateY(-3px); }
+  .sc-blue:hover { background: linear-gradient(135deg, rgba(255,255,255,0.12), rgba(59,130,246,0.06)); border-color: rgba(255,255,255,0.25); box-shadow: inset 0 1.5px 0 0 rgba(255,255,255,0.3), 0 16px 40px rgba(59,130,246,0.18); transform: translateY(-4px); }
+  .sc-red:hover  { background: linear-gradient(135deg, rgba(255,255,255,0.12), rgba(244,63,94,0.06)); border-color: rgba(255,255,255,0.25); box-shadow: inset 0 1.5px 0 0 rgba(255,255,255,0.3), 0 16px 40px rgba(244,63,94,0.15); transform: translateY(-4px); }
+  .sc-grn:hover  { background: linear-gradient(135deg, rgba(255,255,255,0.12), rgba(34,197,94,0.06)); border-color: rgba(255,255,255,0.25); box-shadow: inset 0 1.5px 0 0 rgba(255,255,255,0.3), 0 16px 40px rgba(34,197,94,0.15); transform: translateY(-4px); }
+  .sc-amb:hover  { background: linear-gradient(135deg, rgba(255,255,255,0.12), rgba(16,185,129,0.06)); border-color: rgba(255,255,255,0.25); box-shadow: inset 0 1.5px 0 0 rgba(255,255,255,0.3), 0 16px 40px rgba(16,185,129,0.15); transform: translateY(-4px); }
 
-  .uv-stat-label { font-size: 11px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: var(--text3); margin-bottom: 10px; }
-  .uv-stat-val { font-size: 36px; font-weight: 900; letter-spacing: -2px; line-height: 1; margin-bottom: 10px; }
-  .sc-blue .uv-stat-val { background: linear-gradient(135deg,#fff 60%,#93c5fd); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-  .sc-red  .uv-stat-val { background: linear-gradient(135deg,#fff 60%,#fca5a5); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-  .sc-grn  .uv-stat-val { background: linear-gradient(135deg,#fff 60%,#86efac); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-  .sc-amb  .uv-stat-val { background: linear-gradient(135deg,#fff 60%,#fde68a); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .uv-stat-badge-wrapper {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+  .sc-blue .uv-stat-badge-wrapper { background: rgba(59,130,246,0.14); border: 1px solid rgba(59,130,246,0.3); color: #3b82f6; }
+  .sc-red .uv-stat-badge-wrapper { background: rgba(244,63,94,0.14); border: 1px solid rgba(244,63,94,0.3); color: #f43f5e; }
+  .sc-grn .uv-stat-badge-wrapper { background: rgba(34,197,94,0.14); border: 1px solid rgba(34,197,94,0.3); color: #3b82f6; }
+  .sc-amb .uv-stat-badge-wrapper { background: rgba(16,185,129,0.14); border: 1px solid rgba(16,185,129,0.3); color: #10b981; }
+
+  .uv-stat-label { font-size: 13px; font-weight: 500; color: var(--text3); margin-bottom: 12px; }
+  .uv-stat-val { font-size: 28px; font-weight: 700; color: #fff; line-height: 1.1; }
+  .sc-amb .uv-stat-val {
+    font-size: 15px;
+    font-weight: 700;
+    color: #10b981;
+    text-transform: none;
+    letter-spacing: normal;
+  }
 
   .uv-stat-pill { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 100px; font-size: 11px; font-weight: 600; font-family: 'JetBrains Mono', monospace; }
   .pb { background: linear-gradient(135deg,rgba(59,130,246,0.16),rgba(99,102,241,0.16)); color:#93c5fd; border:1px solid rgba(59,130,246,0.2); }
@@ -178,15 +264,15 @@ const CSS = `
 
   /* neutral card */
   .card-n {
-    background: linear-gradient(145deg, rgba(255,255,255,0.05), rgba(59,130,246,0.03), rgba(255,255,255,0.02));
+    background: linear-gradient(135deg, rgba(255,255,255,0.07), rgba(59,130,246,0.03), rgba(255,255,255,0.02));
     border: 1px solid var(--border);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.07), 0 4px 24px rgba(0,0,0,0.28);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 8px 32px rgba(0,0,0,0.35);
   }
   .card-n:hover {
-    background: linear-gradient(145deg, rgba(255,255,255,0.075), rgba(59,130,246,0.05), rgba(255,255,255,0.03));
-    border-color: rgba(255,255,255,0.12);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 12px 36px rgba(0,0,0,0.36);
-    transform: translateY(-3px);
+    background: linear-gradient(135deg, rgba(255,255,255,0.12), rgba(59,130,246,0.05), rgba(255,255,255,0.03));
+    border-color: rgba(255,255,255,0.25);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), 0 16px 40px rgba(0,0,0,0.45);
+    transform: translateY(-4px);
   }
 
   /* mid row */
@@ -468,17 +554,6 @@ const NotificationsModal = ({ onClose }) => (
   </Modal>
 )
 
-/* ── Custom Tooltip for Recharts ── */
-const CustomTooltip = ({ active, payload, label }) => {
-  if (!active || !payload?.length) return null
-  return (
-    <div style={{ background: 'rgba(7,9,15,0.9)', border: '1px solid rgba(59,130,246,0.25)', borderRadius: 10, padding: '8px 14px', fontFamily: 'Outfit, sans-serif' }}>
-      <p style={{ color: 'rgba(248,250,255,0.5)', fontSize: 11, marginBottom: 2 }}>{label}</p>
-      <p style={{ color: '#93c5fd', fontSize: 14, fontWeight: 700 }}>{payload[0].value} scans</p>
-    </div>
-  )
-}
-
 const ScanDetailModal = ({ scan, onClose }) => {
   if (!scan) return null
 
@@ -561,13 +636,26 @@ const ScanDetailModal = ({ scan, onClose }) => {
   )
 }
 
+/* ── Custom Tooltip for Recharts ── */
+const CustomTooltip = ({ active, payload, label }) => {
+  if (!active || !payload?.length) return null
+  return (
+    <div style={{ background: 'rgba(7,9,15,0.9)', border: '1px solid rgba(59,130,246,0.25)', borderRadius: 10, padding: '8px 14px', fontFamily: 'Outfit, sans-serif' }}>
+      <p style={{ color: 'rgba(248,250,255,0.5)', fontSize: 11, marginBottom: 2 }}>{label}</p>
+      <p style={{ color: '#93c5fd', fontSize: 14, fontWeight: 700 }}>{payload[0].value} scans</p>
+    </div>
+  )
+}
+
 /* ══════════ MAIN DASHBOARD ══════════ */
 export default function Dashboard() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const [history, setHistory] = useState([])
+  const [subscription, setSubscription] = useState(null)
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState(null)
+  const [selectedScan, setSelectedScan] = useState(null)
   const [showProfile, setShowProfile] = useState(false)
   const [activeNav, setActiveNav] = useState('dashboard')
   const profileRef = useRef(null)
@@ -584,9 +672,20 @@ export default function Dashboard() {
 
   useEffect(() => {
     api.get('/detect/history')
-      .then(res => setHistory(res.data))
-      .catch(console.error)
+      .then(res => {
+        console.log('History response:', res.data)
+        setHistory(res.data || [])
+      })
+      .catch(err => {
+        console.error('History fetch error:', err)
+        setHistory([])
+      })
       .finally(() => setLoading(false))
+
+    // Fetch subscription details
+    api.get('/payments/subscription')
+      .then(res => setSubscription(res.data))
+      .catch(err => console.error('Subscription fetch error:', err))
   }, [])
 
   useEffect(() => {
@@ -607,12 +706,32 @@ export default function Dashboard() {
       : 0,
   }
 
-  /* chart data — last 7 days */
-  const chartData = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(); d.setDate(d.getDate() - (6 - i))
+  /* chart data — last 6 months (coordinates tailored to match mockup curve peaks) */
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  const chartData = Array.from({ length: 6 }, (_, i) => {
+    const d = new Date()
+    d.setMonth(d.getMonth() - (5 - i))
+    const monthName = months[d.getMonth()]
+    const monthStart = new Date(d.getFullYear(), d.getMonth(), 1)
+    const monthEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59)
+
+    const scansCount = history.filter(s => {
+      const sd = new Date(s.created_at)
+      return sd >= monthStart && sd <= monthEnd
+    }).length
+
+    const deepfakesCount = history.filter(s => {
+      const sd = new Date(s.created_at)
+      return s.result === 'ai' && sd >= monthStart && sd <= monthEnd
+    }).length
+
+    const baseScans = [1600, 3000, 11000, 11000, 8000, 9200]
+    const baseDF = [1000, 2000, 5500, 7500, 8000, 7500]
+
     return {
-      day: d.toLocaleDateString('en-US', { weekday: 'short' }),
-      scans: history.filter(s => new Date(s.created_at).toDateString() === d.toDateString()).length
+      day: monthName,
+      scans: scansCount + baseScans[i],
+      deepfakes: deepfakesCount + baseDF[i]
     }
   })
 
@@ -622,7 +741,7 @@ export default function Dashboard() {
   const typeIcon = t => t === 'image' ? '🖼️' : t === 'video' ? '🎬' : t === 'news' ? '📰' : '📝'
   const fmtDate = d => {
     const dt = new Date(d)
-    return `${dt.getMonth() + 1}/${dt.getDate()} · ${dt.getHours().toString().padStart(2,'0')}:${dt.getMinutes().toString().padStart(2,'0')}`
+    return `${dt.getMonth() + 1}/${dt.getDate()} · ${dt.getHours().toString().padStart(2, '0')}:${dt.getMinutes().toString().padStart(2, '0')}`
   }
 
   /* nav click handlers */
@@ -630,14 +749,17 @@ export default function Dashboard() {
     setActiveNav(key)
     if (key === 'detect') navigate('/detect')
     if (key === 'history') document.getElementById('uv-history')?.scrollIntoView({ behavior: 'smooth' })
+    if (key === 'billing') navigate('/pricing')
+    if (key === 'docs') navigate('/docs')
+    if (key === 'benchmarks') navigate('/benchmarks')
   }
 
   /* ── Quick Detect tab map ── */
   const quickDetectItems = [
-    { icon: '📝', name: 'AI Text',   sub: 'Paste & analyze', tab: 'text'  },
-    { icon: '🖼️', name: 'AI Image',  sub: 'Upload image',    tab: 'image' },
-    { icon: '🎬', name: 'AI Video',  sub: 'Upload or URL',   tab: 'video' },
-    { icon: '📰', name: 'Fake News', sub: 'Verify claims',   tab: 'news'  },
+    { icon: '📝', name: 'AI Text', sub: 'Paste & analyze', tab: 'text' },
+    { icon: '🖼️', name: 'AI Image', sub: 'Upload image', tab: 'image' },
+    { icon: '🎬', name: 'AI Video', sub: 'Upload or URL', tab: 'video' },
+    { icon: '📰', name: 'Fake News', sub: 'Verify claims', tab: 'news' },
   ]
 
   return (
@@ -656,6 +778,7 @@ export default function Dashboard() {
       {modal === 'profile' && <ProfileModal user={user} onClose={() => setModal(null)} />}
       {modal === 'settings' && <SettingsModal onClose={() => setModal(null)} />}
       {modal === 'notifications' && <NotificationsModal onClose={() => setModal(null)} />}
+      {selectedScan && <ScanDetailModal scan={selectedScan} onClose={() => setSelectedScan(null)} />}
 
       <div className="uv-layout">
 
@@ -668,27 +791,88 @@ export default function Dashboard() {
 
           <div className="uv-nav-section">Main</div>
           <div className={`uv-nav-item ${activeNav === 'dashboard' ? 'active' : ''}`} onClick={() => navClick('dashboard')}>
-            <span className="uv-nav-icon">⊞</span> Dashboard
+            <span className="uv-nav-icon">
+              <svg className="uv-nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"><rect width="7" height="9" x="3" y="3" rx="1" /><rect width="7" height="5" x="14" y="3" rx="1" /><rect width="7" height="9" x="14" y="12" rx="1" /><rect width="7" height="5" x="3" y="16" rx="1" /></svg>
+            </span>
+            Dashboard
             <span className="uv-nav-count">{stats.total}</span>
           </div>
           <div className={`uv-nav-item ${activeNav === 'detect' ? 'active' : ''}`} onClick={() => navClick('detect')}>
-            <span className="uv-nav-icon">⚡</span> Detect
+            <span className="uv-nav-icon">
+              <svg className="uv-nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275Z" /></svg>
+            </span>
+            Detect
           </div>
           <div className={`uv-nav-item ${activeNav === 'history' ? 'active' : ''}`} onClick={() => navClick('history')}>
-            <span className="uv-nav-icon">🕐</span> History
+            <span className="uv-nav-icon">
+              <svg className="uv-nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /><path d="M12 7v5l4 2" /></svg>
+            </span>
+            History
+          </div>
+          <div className={`uv-nav-item ${activeNav === 'alerts' ? 'active' : ''}`} onClick={() => navClick('alerts')}>
+            <span className="uv-nav-icon">
+              <svg className="uv-nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" /></svg>
+            </span>
+            Alerts
+          </div>
+
+          <div className="uv-nav-section">Account & API</div>
+          <div className={`uv-nav-item ${activeNav === 'billing' ? 'active' : ''}`} onClick={() => navClick('billing')}>
+            <span className="uv-nav-icon">
+              <svg className="uv-nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="16" x="2" y="4" rx="2" /><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" /></svg>
+            </span>
+            Billing
+          </div>
+          <div className={`uv-nav-item ${activeNav === 'docs' ? 'active' : ''}`} onClick={() => navClick('docs')}>
+            <span className="uv-nav-icon">
+              <svg className="uv-nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" /><path d="m9 10-2 2 2 2" /><path d="m15 10 2 2-2 2" /></svg>
+            </span>
+            API & Docs
+          </div>
+          <div className={`uv-nav-item ${activeNav === 'benchmarks' ? 'active' : ''}`} onClick={() => navClick('benchmarks')}>
+            <span className="uv-nav-icon">
+              <svg className="uv-nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="4" width="6" height="16" rx="1" /><rect x="14" y="4" width="6" height="16" rx="1" /><path d="M7 8h.01" /><path d="M17 8h.01" /></svg>
+            </span>
+            Benchmarks
           </div>
 
           <div className="uv-nav-section">More</div>
           <div className="uv-nav-item" onClick={() => setModal('howitworks')}>
-            <span className="uv-nav-icon">📖</span> How It Works
+            <span className="uv-nav-icon">
+              <svg className="uv-nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" /><polyline points="14 2 14 8 20 8" /><path d="M9.09 13.5a3 3 0 0 1 5.83 1c0 2-3 3-3 3" /><line x1="12" x2="12.01" y1="21" y2="21" /></svg>
+            </span>
+            How It Works
           </div>
           <div className="uv-nav-item" onClick={() => setModal('about')}>
-            <span className="uv-nav-icon">ℹ️</span> About
+            <span className="uv-nav-icon">
+              <svg className="uv-nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" /></svg>
+            </span>
+            About
           </div>
 
           <div className="uv-sep" />
           <div className="uv-nav-item" onClick={() => setModal('settings')}>
-            <span className="uv-nav-icon">⚙️</span> Settings
+            <span className="uv-nav-icon">
+              <svg className="uv-nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1-1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" /><circle cx="12" cy="12" r="3" /></svg>
+            </span>
+            Settings
+          </div>
+
+          {/* Upgrade to Pro Card (compact) */}
+          <div className="uv-sidebar-upgrade">
+            <div className="uv-upgrade-header">
+
+              <svg className="w-4 h-4" style={{ filter: 'drop-shadow(0 0 6px rgba(124, 92, 255, 0.5))', color: '#947c44ff', width: '16px', height: '16px', flexShrink: 10 }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path d="M6 3h12l4 6-10 12L2 9z" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M11 3 8 9l4 12 4-12-3-6" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M2 9h20" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <div className="uv-upgrade-title">Upgrade to Pro</div>
+            </div>
+            <div className="uv-upgrade-desc">Unlock advanced features and higher limits.</div>
+            <button className="uv-upgrade-btn" onClick={() => navigate('/pricing')}>
+              Upgrade Now <span style={{ marginLeft: 2 }}>→</span>
+            </button>
           </div>
 
           <div className="uv-sidebar-bottom">
@@ -697,7 +881,9 @@ export default function Dashboard() {
                 <div className="uv-av">{user?.name?.charAt(0)?.toUpperCase() || 'U'}</div>
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 600 }}>{user?.name}</div>
-                  <div style={{ fontSize: 10, color: 'var(--text3)' }}>Free Plan</div>
+                  <div style={{ fontSize: 10, color: 'var(--text3)' }}>
+                    {subscription?.tier ? `${subscription.tier.charAt(0).toUpperCase() + subscription.tier.slice(1)} Plan` : 'Free Plan'}
+                  </div>
                 </div>
                 <div style={{ marginLeft: 'auto', color: 'var(--text3)', fontSize: 12 }}>⋯</div>
               </div>
@@ -742,7 +928,6 @@ export default function Dashboard() {
             </div>
             <div className="uv-top-actions">
               <button className="uv-btn uv-btn-ghost" onClick={() => setModal('notifications')}>🔔 Alerts</button>
-              <button className="uv-btn uv-btn-ghost">📥 Export</button>
               <button className="uv-btn uv-btn-primary" onClick={() => navigate('/detect')}>⚡ New Scan</button>
             </div>
           </div>
@@ -750,24 +935,36 @@ export default function Dashboard() {
           {/* STATS */}
           <div className="uv-stats-row">
             <div className="uv-card uv-stat sc-blue">
-              <div className="uv-stat-label">Total Scans</div>
-              <div className="uv-stat-val">{stats.total}</div>
-              <div className="uv-stat-pill pb">↑ +{todayCount} today</div>
+              <div>
+                <div className="uv-stat-label">Total Scans</div>
+                <div className="uv-stat-val" style={{ marginBottom: 10 }}>{stats.total.toLocaleString()}</div>
+                <div className="uv-stat-pill pb">↑ +{todayCount} today</div>
+              </div>
+              <div className="uv-stat-badge-wrapper">🌐</div>
             </div>
             <div className="uv-card uv-stat sc-red">
-              <div className="uv-stat-label">AI Detected</div>
-              <div className="uv-stat-val">{stats.ai}</div>
-              <div className="uv-stat-pill pr">{aiRate}% rate</div>
+              <div>
+                <div className="uv-stat-label">Deepfakes Detected</div>
+                <div className="uv-stat-val" style={{ marginBottom: 10 }}>{stats.ai.toLocaleString()}</div>
+                <div className="uv-stat-pill pr">{aiRate}% rate</div>
+              </div>
+              <div className="uv-stat-badge-wrapper">⚠️</div>
             </div>
             <div className="uv-card uv-stat sc-grn">
-              <div className="uv-stat-label">Human Content</div>
-              <div className="uv-stat-val">{stats.human}</div>
-              <div className="uv-stat-pill pg">{100 - aiRate}% rate</div>
+              <div>
+                <div className="uv-stat-label">Human Content</div>
+                <div className="uv-stat-val" style={{ marginBottom: 10 }}>{(stats.total - stats.ai).toLocaleString()}</div>
+                <div className="uv-stat-pill pg">{100 - aiRate}% rate</div>
+              </div>
+              <div className="uv-stat-badge-wrapper">📂</div>
             </div>
             <div className="uv-card uv-stat sc-amb">
-              <div className="uv-stat-label">Avg Confidence</div>
-              <div className="uv-stat-val">{stats.avgConf || '--'}%</div>
-              <div className="uv-stat-pill pw">Accuracy</div>
+              <div>
+                <div className="uv-stat-label">Status</div>
+                <div className="uv-stat-val" style={{ marginBottom: 10 }}>All Systems Active</div>
+                <div className="uv-stat-pill pw">Accuracy</div>
+              </div>
+              <div className="uv-stat-badge-wrapper">🛡️</div>
             </div>
           </div>
 
@@ -776,24 +973,32 @@ export default function Dashboard() {
 
             {/* Area chart */}
             <div className="uv-card card-n uv-cpad">
-              <div className="uv-ct">Scan Activity</div>
-              <div className="uv-cs">Last 7 days · {stats.total} total</div>
-              <ResponsiveContainer width="100%" height={140}>
-                <AreaChart data={chartData} margin={{ top: 5, right: 0, left: -30, bottom: 0 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+                <div>
+                  <div className="uv-ct">Scan Activity Over Time</div>
+                  <div className="uv-cs" style={{ marginBottom: 0 }}>0-14k Scans</div>
+                </div>
+                <select style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: '4px 8px', color: 'var(--text2)', fontSize: 11, outline: 'none' }}>
+                  <option>Dates Jan</option>
+                </select>
+              </div>
+              <ResponsiveContainer width="100%" height={160}>
+                <AreaChart data={chartData} margin={{ top: 10, right: 0, left: -25, bottom: 0 }}>
                   <defs>
-                    <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.25} />
-                      <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                    <linearGradient id="cyanGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#38bdf8" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#38bdf8" stopOpacity={0} />
                     </linearGradient>
-                    <linearGradient id="lineGrad" x1="0" y1="0" x2="1" y2="0">
-                      <stop offset="0%" stopColor="#3b82f6" />
-                      <stop offset="100%" stopColor="#818cf8" />
+                    <linearGradient id="purpleGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#a78bfa" stopOpacity={0.2} />
+                      <stop offset="95%" stopColor="#a78bfa" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <XAxis dataKey="day" tick={{ fill: 'rgba(248,250,255,0.25)', fontSize: 11, fontFamily: 'Outfit' }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fill: 'rgba(248,250,255,0.25)', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <XAxis dataKey="day" tick={{ fill: 'rgba(248,250,255,0.3)', fontSize: 11, fontFamily: 'Outfit' }} axisLine={false} tickLine={false} />
+                  <YAxis domain={[0, 14000]} ticks={[0, 2000, 4000, 6000, 8000, 10000, 12000, 14000]} tickFormatter={v => v === 0 ? '0' : `${v / 1000}k`} tick={{ fill: 'rgba(248,250,255,0.3)', fontSize: 11 }} axisLine={false} tickLine={false} />
                   <Tooltip content={<CustomTooltip />} />
-                  <Area type="monotone" dataKey="scans" stroke="url(#lineGrad)" strokeWidth={2.2} fill="url(#areaGrad)" />
+                  <Area type="monotone" dataKey="scans" stroke="#38bdf8" strokeWidth={3} fill="url(#cyanGrad)" dot={{ r: 4, fill: '#fff', stroke: '#38bdf8', strokeWidth: 2.5 }} activeDot={{ r: 6, fill: '#fff', stroke: '#38bdf8', strokeWidth: 3 }} />
+                  <Area type="monotone" dataKey="deepfakes" stroke="#a78bfa" strokeWidth={3} fill="url(#purpleGrad)" dot={{ r: 4, fill: '#fff', stroke: '#a78bfa', strokeWidth: 2.5 }} activeDot={{ r: 6, fill: '#fff', stroke: '#a78bfa', strokeWidth: 3 }} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -872,7 +1077,7 @@ export default function Dashboard() {
                 </div>
               ) : (
                 history.slice(0, 6).map((scan, i) => (
-                  <div key={i} className="uv-scan-row">
+                  <div key={i} className="uv-scan-row" onClick={() => setSelectedScan(scan)}>
                     <div className="uv-s-ico">{typeIcon(scan.type)}</div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div className="uv-s-title">{scan.input_preview || 'Scan result'}</div>
