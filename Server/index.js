@@ -36,7 +36,7 @@ app.listen(PORT, () => {
   console.log(`✅ Server running on port ${PORT}`)
 })
 
-const supabase = require('./config/supabase')
+const supabase = require('./Config/supabase')
 
 // Add this temporarily after app is created
 supabase.from('profiles').select('count').then(({data, error}) => {
