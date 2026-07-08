@@ -4,7 +4,7 @@ import axios from 'axios'
 const api = axios.create({
   baseURL: import.meta.env.DEV
     ? 'http://localhost:5000/api'
-    :' https://unveil-backend-1cqg.onrender.com/api',
+    : 'https://unveil-backend-1cqg.onrender.com/api',
 })
 
 api.interceptors.request.use((config) => {
