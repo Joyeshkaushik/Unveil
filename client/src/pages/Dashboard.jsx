@@ -152,23 +152,26 @@ const CSS = `
     color: #fff;
   }
 
-  .uv-sidebar-bottom { margin-top: auto; padding-top: 14px; border-top: 1px solid var(--border); }
+  .uv-sidebar-bottom { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--border); margin: auto 2px 0; }
   .uv-user-pill {
-    display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px;
-    background: linear-gradient(135deg, rgba(13, 17, 39, 0.7) 0%, rgba(8, 10, 24, 0.5) 100%);
-    border: 1px solid rgba(124, 92, 255, 0.15); cursor: pointer; transition: all 0.2s ease;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    display: flex; align-items: center; gap: 11px; padding: 9px 12px 9px 9px; border-radius: 14px;
+    background: linear-gradient(135deg, rgba(15,19,45,0.85) 0%, rgba(9,11,28,0.7) 100%);
+    border: 1px solid rgba(124,92,255,0.28); cursor: pointer; transition: all 0.25s ease;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.06);
   }
   .uv-user-pill:hover {
-    background: linear-gradient(135deg, rgba(17, 21, 45, 0.8) 0%, rgba(10, 12, 30, 0.6) 100%);
-    border-color: rgba(34, 8, 137, 0.3); box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    background: linear-gradient(135deg, rgba(20,24,56,0.92) 0%, rgba(12,14,36,0.8) 100%);
+    border-color: rgba(124,92,255,0.5);
+    box-shadow: 0 6px 24px rgba(0,0,0,0.4), 0 0 16px rgba(124,92,255,0.18), inset 0 1px 0 rgba(255,255,255,0.08);
+    transform: translateY(-1px);
   }
   .uv-av {
-    width: 30px; height: 30px; border-radius: 50%;
-    background: linear-gradient(135deg, #3b82f6, #818cf8);
+    width: 34px; height: 34px; border-radius: 50%;
+    background: linear-gradient(135deg, #3b82f6 0%, #7c5cff 50%, #818cf8 100%);
     display: flex; align-items: center; justify-content: center;
-    font-weight: 800; font-size: 13px; flex-shrink: 0; color: white;
-    box-shadow: 0 0 14px rgba(59,130,246,0.4);
+    font-weight: 800; font-size: 14px; flex-shrink: 0; color: white;
+    box-shadow: 0 0 0 2px rgba(124,92,255,0.35), 0 0 18px rgba(59,130,246,0.5);
+    letter-spacing: -0.5px;
   }
 
   /* main */
@@ -386,22 +389,27 @@ const CSS = `
 
   /* profile dropdown */
   .uv-profile-drop {
-    position: absolute; top: calc(100% + 8px); right: 0;
-    background: linear-gradient(145deg, rgba(255,255,255,0.08), rgba(59,130,246,0.03));
-    border: 1px solid rgba(255,255,255,0.12); border-radius: 16px;
-    padding: 8px; min-width: 210px; z-index: 200;
-    backdrop-filter: blur(32px);
-    box-shadow: 0 16px 48px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1);
+    position: absolute; bottom: calc(100% + 8px); top: auto; left: 0; right: 0;
+    background: linear-gradient(160deg, #0f1229 0%, #111628 100%);
+    border: 1px solid rgba(124, 92, 255, 0.45); border-radius: 16px;
+    padding: 8px; z-index: 300;
+    backdrop-filter: blur(40px);
+    box-shadow: 0 24px 60px rgba(0,0,0,0.75), 0 0 0 1px rgba(255,255,255,0.05) inset, 0 0 24px rgba(124,92,255,0.15);
+    animation: dropIn 0.18s cubic-bezier(0.34,1.56,0.64,1) both;
+  }
+  @keyframes dropIn {
+    from { opacity: 0; transform: translateY(6px) scale(0.97); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
   }
   .uv-drop-item {
     display: flex; align-items: center; gap: 10px;
-    padding: 9px 14px; border-radius: 100px;
-    cursor: pointer; color: var(--text2); font-size: 13.5px;
+    padding: 9px 14px; border-radius: 10px;
+    cursor: pointer; color: rgba(248,250,255,0.8); font-size: 13.5px;
     transition: all 0.15s;
   }
-  .uv-drop-item:hover { background: var(--glass2); color: var(--text); }
+  .uv-drop-item:hover { background: rgba(124,92,255,0.15); color: #fff; }
   .uv-drop-item.danger { color: #fca5a5; }
-  .uv-drop-item.danger:hover { background: rgba(244,63,94,0.1); }
+  .uv-drop-item.danger:hover { background: rgba(244,63,94,0.12); color: #f87171; }
 
   /* Recharts custom tooltip */
   .uv-tooltip {
@@ -809,11 +817,18 @@ export default function Dashboard() {
             </span>
             History
           </div>
-          <div className={`uv-nav-item ${activeNav === 'alerts' ? 'active' : ''}`} onClick={() => navClick('alerts')}>
+          <div className="uv-nav-item" onClick={() => {
+            const a = document.createElement('a')
+            a.href = '/unveil-extension.zip'
+            a.download = 'unveil-extension.zip'
+            document.body.appendChild(a)
+            a.click()
+            document.body.removeChild(a)
+          }}>
             <span className="uv-nav-icon">
-              <svg className="uv-nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" /></svg>
+              <svg className="uv-nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" x2="12" y1="15" y2="3" /></svg>
             </span>
-            Alerts
+            Get Extension
           </div>
 
           <div className="uv-nav-section">Account & API</div>
@@ -879,19 +894,19 @@ export default function Dashboard() {
             <div ref={profileRef} style={{ position: 'relative' }}>
               <div className="uv-user-pill" onClick={() => setShowProfile(!showProfile)}>
                 <div className="uv-av">{user?.name?.charAt(0)?.toUpperCase() || 'U'}</div>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>{user?.name}</div>
-                  <div style={{ fontSize: 10, color: 'var(--text3)' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#f0f4ff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user?.name}</div>
+                  <div style={{ fontSize: 10, color: 'rgba(180,190,255,0.5)', marginTop: 1, whiteSpace: 'nowrap' }}>
                     {subscription?.tier ? `${subscription.tier.charAt(0).toUpperCase() + subscription.tier.slice(1)} Plan` : 'Free Plan'}
                   </div>
                 </div>
-                <div style={{ marginLeft: 'auto', color: 'var(--text3)', fontSize: 12 }}>⋯</div>
+                <div style={{ marginLeft: 2, color: 'rgba(180,190,255,0.45)', fontSize: 18, lineHeight: 1, flexShrink: 0 }}>›</div>
               </div>
               {showProfile && (
-                <div className="uv-profile-drop" style={{ bottom: 'calc(100% + 8px)', top: 'auto' }}>
-                  <div style={{ padding: '10px 14px', borderBottom: '1px solid rgba(255,255,255,0.07)', marginBottom: 4 }}>
-                    <div style={{ fontSize: 14, fontWeight: 600 }}>{user?.name}</div>
-                    <div style={{ color: 'var(--text3)', fontSize: 12, marginTop: 2 }}>{user?.email}</div>
+                <div className="uv-profile-drop">
+                  <div style={{ padding: '10px 14px', borderBottom: '1px solid rgba(124,92,255,0.25)', marginBottom: 4 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: '#f0f4ff' }}>{user?.name}</div>
+                    <div style={{ color: 'rgba(200,210,255,0.55)', fontSize: 12, marginTop: 2 }}>{user?.email}</div>
                   </div>
                   {[
                     { icon: '👤', label: 'Profile', action: 'profile' },
@@ -902,7 +917,7 @@ export default function Dashboard() {
                       <span>{item.icon}</span><span>{item.label}</span>
                     </div>
                   ))}
-                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', marginTop: 4, paddingTop: 4 }}>
+                  <div style={{ borderTop: '1px solid rgba(124,92,255,0.2)', marginTop: 4, paddingTop: 4 }}>
                     <div className="uv-drop-item danger" onClick={() => { logout(); navigate('/') }}>
                       <span>🚪</span><span>Logout</span>
                     </div>
