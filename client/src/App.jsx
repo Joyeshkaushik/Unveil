@@ -6,6 +6,9 @@ import Login from './pages/Login'
 import Signup from './pages/Signup'
 import Dashboard from './pages/Dashboard'
 import Detect from './pages/Detect'
+import Docs from './pages/Docs';
+import Benchmarks from './pages/Benchmark';
+import Pricing from './pages/Pricing';
 const ProtectedRoute=({children})=>{
   const {user,loading}=useAuth()
    if (loading) return (
@@ -25,6 +28,9 @@ function App(){
          <Route path="/signup" element={<Signup />} />
         <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
            <Route path="/Detect" element={<ProtectedRoute><Detect /></ProtectedRoute>} />
+           <Route path="/docs" element={<ProtectedRoute><Docs/></ProtectedRoute>}/>
+           <Route path="/benchmarks" element={<ProtectedRoute><Benchmarks/></ProtectedRoute>}/>
+            <Route path="/pricing" element={<Pricing />} />
       </Routes>
     </BrowserRouter>
     </AuthProvider>

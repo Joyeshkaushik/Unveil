@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import api from '../api/axios'
+import { exportScanToPDF } from '../utils/pdfExport'
 
 /* ── CSS injected once ── */
 const CSS = `
@@ -10,12 +11,12 @@ const CSS = `
   :root {
     --bg: #07090f;
     --text: #f8faff;
-    --text2: rgba(248,250,255,0.5);
-    --text3: rgba(248,250,255,0.25);
-    --border: rgba(255,255,255,0.07);
-    --border-b: rgba(255,255,255,0.13);
-    --glass: rgba(255,255,255,0.04);
-    --glass2: rgba(255,255,255,0.07);
+    --text2: rgba(248,250,255,0.65);
+    --text3: rgba(248,250,255,0.35);
+    --border: rgba(255,255,255,0.12);
+    --border-b: rgba(255,255,255,0.22);
+    --glass: rgba(255,255,255,0.08);
+    --glass2: rgba(255,255,255,0.15);
   }
   html, body, #root { min-height: 100%; }
   body { font-family: 'Outfit', sans-serif; background: var(--bg); color: var(--text); overflow-x: hidden; }
@@ -84,18 +85,18 @@ const CSS = `
   }
 
   .dt-card {
-    background: linear-gradient(145deg, rgba(255,255,255,0.055), rgba(59,130,246,0.025), rgba(255,255,255,0.02));
+    background: linear-gradient(135deg, rgba(255,255,255,0.07), rgba(59,130,246,0.03), rgba(255,255,255,0.02));
     border: 1px solid var(--border); border-radius: 24px; padding: 28px;
-    backdrop-filter: blur(28px); position: relative; overflow: hidden;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 8px 32px rgba(0,0,0,0.32);
+    backdrop-filter: blur(36px) saturate(130%); position: relative; overflow: hidden;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 8px 32px rgba(0, 0, 0, 0.35);
   }
   .dt-card::before {
     content: ''; position: absolute; top: 0; left: 15%; right: 15%; height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.18), transparent);
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.22), transparent);
   }
   .dt-card::after {
     content: ''; position: absolute; bottom: 0; left: 20%; right: 20%; height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(59,130,246,0.1), transparent);
+    background: linear-gradient(90deg, transparent, rgba(59,130,246,0.14), transparent);
   }
 
   .dt-textarea {
@@ -214,6 +215,15 @@ const CSS = `
 
   @keyframes spin { to { transform: rotate(360deg); } }
   .dt-spin { display: inline-block; width: 15px; height: 15px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.7s linear infinite; }
+
+  .dt-disclaimer {
+    margin-top: 24px; padding: 16px 20px; border-radius: 16px;
+    background: rgba(251, 191, 36, 0.03); border: 1px solid rgba(251, 191, 36, 0.15);
+    display: flex; gap: 12px; align-items: flex-start;
+  }
+  .dt-disclaimer-icon { font-size: 16px; color: #fbbf24; flex-shrink: 0; margin-top: 1px; }
+  .dt-disclaimer-text { font-size: 12.5px; color: rgba(248, 250, 255, 0.6); line-height: 1.6; text-align: left; }
+  .dt-disclaimer-title { font-size: 13px; font-weight: 700; color: #fbbf24; margin-bottom: 4px; letter-spacing: 0.5px; text-transform: uppercase; }
 `
 
 export default function Detect() {
@@ -226,6 +236,7 @@ export default function Detect() {
   const [videoUrl, setVideoUrl] = useState('')
   const [videoInputMode, setVideoInputMode] = useState('file')
   const [newsText, setNewsText] = useState('')
+  const [urlInput, setUrlInput] = useState('')
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -242,7 +253,7 @@ export default function Detect() {
   /* ── read ?tab= param and set active tab ── */
   useEffect(() => {
     const tab = searchParams.get('tab')
-    if (tab && ['text', 'image', 'video', 'news'].includes(tab)) {
+    if (tab && ['text', 'image', 'video', 'url', 'news'].includes(tab)) {
       setMode(tab)
     }
   }, [searchParams])
@@ -288,10 +299,19 @@ export default function Detect() {
     finally { setLoading(false) }
   }
 
+  const handleUrlScan = async () => {
+    if (!urlInput.trim()) return
+    setLoading(true); reset()
+    try { setResult((await api.post('/detect/url', { url: urlInput })).data) }
+    catch (e) { setError(e.response?.data?.error || 'URL detection failed') }
+    finally { setLoading(false) }
+  }
+
   const tabs = [
     { key: 'text', label: 'Text', icon: '📝' },
     { key: 'image', label: 'Image', icon: '🖼️' },
     { key: 'video', label: 'Video', icon: '🎬' },
+    { key: 'url', label: 'URL', icon: '🔗' },
     { key: 'news', label: 'News', icon: '📰' },
   ]
 
@@ -299,13 +319,13 @@ export default function Detect() {
   const isNews = result?.type === 'news'
   const verdict = isNews
     ? ({ true: 'Likely True', false: 'Likely False', misleading: 'Misleading' }[result.verdict] || 'Unverified')
-    : (isAI ? 'AI Generated' : mode === 'image' ? 'Human Made' : mode === 'video' ? 'Likely Human' : 'Human Written')
+    : (isAI ? 'AI Generated' : mode === 'image' ? 'Human Made' : mode === 'video' ? 'Likely Human' : mode === 'url' ? 'Likely Human' : 'Human Written')
   const verdictColor = isNews
     ? (result.verdict === 'true' ? '#86efac' : result.verdict === 'false' ? '#fca5a5' : '#fde68a')
     : (isAI ? '#fca5a5' : '#86efac')
   const verdictEmoji = isNews
     ? ({ true: '✅', false: '❌', misleading: '⚠️' }[result.verdict] || '❓')
-    : (isAI ? '🤖' : mode === 'image' ? '🖼️' : mode === 'video' ? '🎬' : '👤')
+    : (isAI ? '🤖' : mode === 'image' ? '🖼️' : mode === 'video' ? '🎬' : mode === 'url' ? '🔗' : '👤')
   const resultClass = isNews ? 'dt-result-news' : isAI ? 'dt-result-ai' : 'dt-result-human'
 
   return (
@@ -409,6 +429,20 @@ export default function Detect() {
             </button>
           </>}
 
+          {/* URL */}
+          {mode === 'url' && <>
+            <label className="dt-label">Enter Webpage URL to analyze</label>
+            <input className="dt-input" type="url" value={urlInput} onChange={e => setUrlInput(e.target.value)}
+              placeholder="https://example.com/article-to-analyze" />
+            <div className="dt-info" style={{ marginTop: 12, marginBottom: 16 }}>
+              <span>ℹ️</span>
+              <p>Fetches the webpage content, extracts clean text content, and runs advanced AI detection analysis on it.</p>
+            </div>
+            <button className="dt-btn-primary full" disabled={loading || !urlInput.trim()} onClick={handleUrlScan}>
+              {loading ? <><span className="dt-spin" /> Fetching & Analyzing...</> : 'Analyze URL →'}
+            </button>
+          </>}
+
           {/* NEWS */}
           {mode === 'news' && <>
             <label className="dt-label">Paste a news headline or claim</label>
@@ -477,6 +511,43 @@ export default function Detect() {
               </div>
             )}
 
+            {/* Methodology - Text detection transparency */}
+            {result.methodology && (
+              <div className="dt-box" style={{ background: 'rgba(99,102,241,0.04)', borderColor: 'rgba(99,102,241,0.12)' }}>
+                <div className="dt-box-label" style={{ color: '#a5b4fc' }}>Detection Methodology</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                  <div style={{ background: 'rgba(0,0,0,0.2)', padding: 12, borderRadius: 10 }}>
+                    <div style={{ fontSize: 10, color: 'var(--text3)', marginBottom: 4 }}>STATISTICAL ANALYSIS</div>
+                    <div style={{ fontSize: 18, fontWeight: 700, fontFamily: 'JetBrains Mono', color: '#a5b4fc' }}>{result.methodology.statistical?.aiScore}%</div>
+                  </div>
+                  <div style={{ background: 'rgba(0,0,0,0.2)', padding: 12, borderRadius: 10 }}>
+                    <div style={{ fontSize: 10, color: 'var(--text3)', marginBottom: 4 }}>LLM ANALYSIS</div>
+                    <div style={{ fontSize: 18, fontWeight: 700, fontFamily: 'JetBrains Mono', color: '#a5b4fc' }}>{result.methodology.llm?.aiScore ?? 'N/A'}%</div>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+                  {result.methodology.statistical?.burstiness && (
+                    <span style={{ padding: '3px 10px', borderRadius: 100, fontSize: 10, background: 'rgba(99,102,241,0.1)', color: '#a5b4fc', border: '1px solid rgba(99,102,241,0.2)' }}>
+                      Burstiness: {result.methodology.statistical.burstiness}
+                    </span>
+                  )}
+                  {result.methodology.statistical?.vocabulary && (
+                    <span style={{ padding: '3px 10px', borderRadius: 100, fontSize: 10, background: 'rgba(99,102,241,0.1)', color: '#a5b4fc', border: '1px solid rgba(99,102,241,0.2)' }}>
+                      Vocabulary: {result.methodology.statistical.vocabulary}
+                    </span>
+                  )}
+                  {result.methodology.statistical?.patternsFound > 0 && (
+                    <span style={{ padding: '3px 10px', borderRadius: 100, fontSize: 10, background: 'rgba(244,63,94,0.1)', color: '#fca5a5', border: '1px solid rgba(244,63,94,0.2)' }}>
+                      {result.methodology.statistical.patternsFound} AI patterns found
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text3)', lineHeight: 1.5 }}>
+                  {result.methodology.note}
+                </div>
+              </div>
+            )}
+
             {/* Flags */}
             {result.flags?.length > 0 && (
               <div className="dt-box dt-box-red">
@@ -538,10 +609,24 @@ export default function Detect() {
               </div>
             )}
 
-            <button className="dt-btn-ghost" onClick={() => {
-              setResult(null); setError(''); setText(''); setImage(null);
-              setVideoFile(null); setVideoUrl(''); setNewsText('')
-            }}>Scan Another</button>
+            {/* Disclaimer Component */}
+            <div className="dt-disclaimer">
+              <span className="dt-disclaimer-icon">⚠️</span>
+              <div className="dt-disclaimer-text">
+                <div className="dt-disclaimer-title">Disclaimer</div>
+                AI content verification is based on probabilistic heuristics and statistical patterns. Results may contain errors, false positives, or false negatives. Use these scores for informational and guidance purposes only.
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 12, marginTop: 14 }}>
+              <button className="dt-btn-ghost" style={{ marginTop: 0, width: 'auto', flex: 1 }} onClick={() => {
+                setResult(null); setError(''); setText(''); setImage(null);
+                setVideoFile(null); setVideoUrl(''); setNewsText(''); setUrlInput('')
+              }}>Scan Another</button>
+              <button className="dt-btn-primary" style={{ flex: 1, padding: '12px 20px', borderRadius: 14, boxShadow: 'none', marginTop: 0 }} onClick={() => exportScanToPDF(result, mode)}>
+                📥 Export PDF Report
+              </button>
+            </div>
           </div>
         )}
       </div>
