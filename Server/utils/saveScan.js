@@ -1,4 +1,5 @@
 const supabase = require('../Config/supabase')
+const {redis}=require('../Config/redis')
 
 async function saveScan({
   userId,
@@ -19,6 +20,10 @@ async function saveScan({
     if (error) {
       console.error('Save scan error:', error.message)
     }
+      // INVALIDATE history cache — user has a new scan now
+    await redis.del(`history:${userId}`)
+    console.log(`Cache invalidated for user ${userId}`)
+
   } catch (err) {
     console.error('Database save error:', err.message)
   }
