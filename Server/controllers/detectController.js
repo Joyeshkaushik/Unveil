@@ -34,7 +34,14 @@ const detectText = async (req, res) => {
   const cacheKey=`scan_text:${textHash}`
 
   try {
-    
+    //Check cache first
+    const cached=await redis.get(cacheKey)
+    if(cached){
+      console.log('Text scan cache HIT')
+      const cachedResult=JSON.parse(cached)
+      return res.json({...cachedResult,fromCache:true})
+    }
+    console.log('Text scan cache MISS -calling Groq')
     const statistical = analyzeText(text)
 
     let llmData = null
@@ -145,7 +152,9 @@ Respond ONLY with JSON:
       },
       originalText: text
     }
-
+    //Saving result to redis cache with 1 hour of ttl
+    await redis.set(cacheKey,JSON.stringify(response),'EX',3600)
+    console.log('Text scan result cached')
     await saveScan({
       userId: req.user.id,
       type: 'text',
