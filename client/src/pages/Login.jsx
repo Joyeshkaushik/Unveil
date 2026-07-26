@@ -206,7 +206,8 @@ export default function Login() {
       await login(form.email, form.password)
       navigate('/dashboard')
     } catch (e) {
-      setError(e.response?.data?.error || 'Invalid email or password.')
+      const message=e.response?.data?.error ||e.response?.data?.message ||'Login Failed .Please try again'
+      setError(message)
     } finally { setLoading(false) }
   }
 

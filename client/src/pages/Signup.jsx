@@ -217,9 +217,13 @@ export default function Signup() {
     try {
       await signup(form.name, form.email, form.password)
       navigate('/dashboard')
-    } catch (e) {
-      setError(e.response?.data?.error || 'Failed to create account.')
-    } finally { setLoading(false) }
+    }  catch (err) {
+  const message = err.response?.data?.error
+    || err.response?.data?.message
+    || 'Signup failed. Please try again.'
+
+  setError(message)
+} finally { setLoading(false) }
   }
 
   const perks = ['Free forever plan', 'Text & Image detection', 'Video analysis', 'Scan history dashboard', 'Powered by Groq AI']
