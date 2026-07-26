@@ -5,6 +5,8 @@ const path = require('path')
 const os = require('os')
 const ffmpeg = require('fluent-ffmpeg')
 const FormData = require('form-data')
+const redis =require('../Config/redis')
+const crypto =require('crypto')
 
 const { analyzeText } = require('../utils/textAnalysis')
 const parseAIResponse = require('../utils/parseAIResponse')
@@ -28,8 +30,11 @@ const detectText = async (req, res) => {
       error: 'Text too short. Minimum 50 characters for accurate detection.'
     })
   }
+  const textHash=crypto.createHash('md5').update(text).digest('hex')
+  const cacheKey=`scan_text:${textHash}`
 
   try {
+    
     const statistical = analyzeText(text)
 
     let llmData = null
