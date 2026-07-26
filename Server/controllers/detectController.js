@@ -406,7 +406,16 @@ Respond ONLY with JSON:
 }
 
 const getHistory = async (req, res) => {
+  const cacheKey = `history:${req.user.id}`
   try {
+    // Check cache
+    const cached = await redis.get(cacheKey)
+    if (cached) {
+      console.log('History cache HIT')
+      return res.json(JSON.parse(cached))
+    }
+
+    console.log('History cache MISS — hitting Supabase')
     const supabase = require('../Config/supabase')
 
     const { data, error } = await supabase
@@ -416,6 +425,9 @@ const getHistory = async (req, res) => {
       .order('created_at', {
         ascending: false
       })
+
+      //cache for 2 minutes for history 
+      await redis.set(cacheKey, JSON.stringify(data), 'EX', 120)
       
 
     if (error) {
