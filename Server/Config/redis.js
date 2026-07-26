@@ -1,5 +1,5 @@
 const Redis=require('ioredis');
-requuire('dotenv').config()
+require('dotenv').config()
 
 const redis=new Redis(process.env.REDIS_URL,{
     maxRetriesPerRequest:3,
@@ -15,4 +15,13 @@ redis.on('connect',()=>{
 redis.on('error',(err)=>{
     console.log('Redis error:',err.message)
 })
-module.exports=redis
+// Call this when user upgrades/downgrades subscription
+async function invalidateUserTierCache(userId) {
+  try {
+    await redis.del(`user_tier:${userId}`)
+    console.log(`Tier cache cleared for user ${userId}`)
+  } catch (err) {
+    console.log('Cache invalidation error:', err.message)
+  }
+}
+module.exports = { redis, invalidateUserTierCache }
