@@ -1,39 +1,47 @@
 const rateLimit = require('express-rate-limit')
 const supabase = require('../Config/supabase')
 const { getTierLimits } = require('../Config/pricing')
-
-// Cache for user subscription status (5 min TTL)
-const subscriptionCache = new Map()
-const CACHE_TTL = 5 * 60 * 1000
+const {redis}=require('../Config/redis')
+const {RedisStore}=require('rate-limit-redis')
 
 async function getUserTier(userId) {
   if (!userId) return 'free'
 
-  // Check cache first
-  const cached = subscriptionCache.get(userId)
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    return cached.tier
-  }
+  const cacheKey=`user_tier:${userId}`
+  try{
+     // step:1 Check  Redis cache first
+     const cached=await redis.get(cacheKey)
+     if(cached){
+       console.log(`Cache HIT for user ${userId}`)
+       return cached  //Redis returns string directly
+     }
+     console.log(`Cache MISS for user ${userId} -hitting DB`)
 
-  try {
-    const { data } = await supabase
+     const { data } = await supabase
       .from('profiles')
       .select('subscription_tier, subscription_status')
       .eq('id', userId)
       .single()
+       const tier = data?.subscription_status === 'active' ? (data.subscription_tier || 'free') : 'free'
 
-    const tier = data?.subscription_status === 'active' ? (data.subscription_tier || 'free') : 'free'
-
-    // Update cache
-    subscriptionCache.set(userId, { tier, timestamp: Date.now() })
-
+    // Store in redis with 5 minute ttl
+    await redis.set(cacheKey,tier,'EX',300)
     return tier
-  } catch (err) {
-    console.log('Error fetching user tier:', err.message)
-    return 'free'
+
+  }
+  catch(err){
+    console.log('Cache/DB error:',err.message)
+    return 'free'  //Safe fallback if any error comes
   }
 }
-
+function createRedisStore(prefix){
+  const client=redis.getRawClient()
+  if(!client) return undefined
+  return new RedisStore({
+    sendCommand:(...args)=>client.call(...args),
+    prefix:`rl:${prefix}`,
+  })
+}
 // Global rate limit - prevents DDoS
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -41,6 +49,7 @@ const globalLimiter = rateLimit({
   message: { error: 'Too many requests, please try again later' },
   standardHeaders: true,
   legacyHeaders: false,
+  store:createRedisStore('global'),
 })
 
 // Detection endpoints - tier-based limits (keyed by user ID only)
@@ -55,6 +64,7 @@ const detectLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => req.user?.id || 'anonymous',
+  store:createRedisStore('detect')
 })
 
 // Video detection - extra strict (expensive to process)
@@ -69,6 +79,7 @@ const videoLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => req.user?.id || 'anonymous',
+  store:createRedisStore('video'),
 })
 
 // Auth endpoints - prevent brute force
@@ -78,6 +89,7 @@ const authLimiter = rateLimit({
   message: { error: 'Too many login attempts, please try again later' },
   standardHeaders: true,
   legacyHeaders: false,
+  store:createRedisStore('auth'), 
 })
 
 module.exports = {

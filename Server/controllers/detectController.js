@@ -5,7 +5,7 @@ const path = require('path')
 const os = require('os')
 const ffmpeg = require('fluent-ffmpeg')
 const FormData = require('form-data')
-const redis =require('../Config/redis')
+const {redis} =require('../Config/redis')
 const crypto =require('crypto')
 
 const { analyzeText } = require('../utils/textAnalysis')

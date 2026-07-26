@@ -1,6 +1,7 @@
 const express = require('express')
 const cors = require('cors')
 require('dotenv').config()
+const {redis}=require('./Config/redis')
 
 const authRoutes = require('./routes/authRoutes')
 const detectRoutes = require('./routes/detectRoutes')
@@ -9,6 +10,12 @@ const paymentsRoutes = require('./routes/payments')
 const { globalLimiter } = require('./middleware/rateLimit')
 
 const app = express()
+redis.ping().then(() => {
+  console.log('✅ Redis connected!')
+}).catch((err) => {
+  console.log('⚠️ Redis not available:', err.message)
+  console.log('Falling back to no caching')
+})
 
 // Trust proxy headers for accurate rate limiting
 app.set('trust proxy', 1)
