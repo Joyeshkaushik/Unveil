@@ -1,26 +1,24 @@
 const jwt = require('jsonwebtoken')
 const supabase = require('../Config/supabase')
+const pool=require('../Config/db')
 
 const authMiddleware = async (req, res, next) => {
   // 1. Check for API key in headers first
   const apiKey = req.headers['x-api-key']
   if (apiKey) {
     try {
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('id, email, subscription_tier')
-        .eq('api_key', apiKey)
-        .single()
+      const result = await pool.query(
+        `SELECT id, email, subscription_tier
+         FROM users
+         WHERE api_key = $1`,
+        [apiKey]
+      )
 
-      if (error || !profile) {
+      if (result.rows.length === 0) {
         return res.status(401).json({ error: 'Invalid API Key' })
       }
 
-      req.user = {
-        id: profile.id,
-        email: profile.email,
-        subscription_tier: profile.subscription_tier
-      }
+      req.user = result.rows[0]
       return next()
     } catch (dbErr) {
       console.error('API key auth database error:', dbErr.message)

@@ -1,5 +1,5 @@
 const rateLimit = require('express-rate-limit')
-const supabase = require('../Config/supabase')
+const pool=require('../Config/db')
 const { getTierLimits } = require('../Config/pricing')
 const {redis}=require('../Config/redis')
 const {RedisStore}=require('rate-limit-redis')
@@ -17,11 +17,11 @@ async function getUserTier(userId) {
      }
      console.log(`Cache MISS for user ${userId} -hitting DB`)
 
-     const { data } = await supabase
-      .from('profiles')
-      .select('subscription_tier, subscription_status')
-      .eq('id', userId)
-      .single()
+     const result = await pool.query(
+  'SELECT subscription_tier, subscription_status FROM users WHERE id = $1',
+  [userId]
+)    
+  const data = result.rows[0]
        const tier = data?.subscription_status === 'active' ? (data.subscription_tier || 'free') : 'free'
 
     // Store in redis with 5 minute ttl
