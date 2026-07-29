@@ -7,6 +7,7 @@ const ffmpeg = require('fluent-ffmpeg')
 const FormData = require('form-data')
 const {redis} =require('../Config/redis')
 const crypto =require('crypto')
+const pool = require('../Config/db')
 
 const { analyzeText } = require('../utils/textAnalysis')
 const parseAIResponse = require('../utils/parseAIResponse')
@@ -217,7 +218,7 @@ const detectImage = async (req, res) => {
 
     try {
       const groqVision = await groq.chat.completions.create({
-        model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+        model: 'qwen/qwen3.6-27b',
         messages: [{
           role: 'user',
           content: [
@@ -248,7 +249,8 @@ Respond ONLY with JSON:
           ]
         }],
         temperature: 0.1,
-        max_tokens: 800
+        max_tokens: 800,
+         reasoning_effort: 'none', 
       })
 
       const parsed = parseAIResponse(
@@ -334,7 +336,7 @@ const detectImageUrl = async (req, res) => {
 
     try {
       const groqVision = await groq.chat.completions.create({
-        model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+        model: 'qwen/qwen3.6-27b',
         messages: [{
           role: 'user',
           content: [
@@ -365,7 +367,8 @@ Respond ONLY with JSON:
           ]
         }],
         temperature: 0.1,
-        max_tokens: 600
+        max_tokens: 600,
+         reasoning_effort: 'none', 
       })
 
       const parsed = parseAIResponse(
@@ -404,51 +407,39 @@ Respond ONLY with JSON:
     })
   }
 }
-
 const getHistory = async (req, res) => {
   const cacheKey = `history:${req.user.id}`
+
   try {
-    // Check cache
+    // Check Redis cache first
     const cached = await redis.get(cacheKey)
     if (cached) {
       console.log('History cache HIT')
       return res.json(JSON.parse(cached))
     }
 
-    console.log('History cache MISS — hitting Supabase')
-    const supabase = require('../Config/supabase')
+    console.log('History cache MISS — hitting PostgreSQL')
 
-    const { data, error } = await supabase
-      .from('scans')
-      .select('*')
-      .eq('user_id', req.user.id)
-      .order('created_at', {
-        ascending: false
-      })
+    // Query PostgreSQL directly — no supabase
+    const result = await pool.query(
+      `SELECT * FROM scans
+       WHERE user_id = $1
+       ORDER BY created_at DESC`,
+      [req.user.id]
+    )
 
-      //cache for 2 minutes for history 
-      await redis.set(cacheKey, JSON.stringify(data), 'EX', 120)
-      
+    console.log(`Found ${result.rows.length} scans`)
 
-    if (error) {
-      return res.status(500).json({
-       
-        error: 'Could not fetch history'
-      })
-    }
-  
+    // Cache result for 2 minutes
+    await redis.set(cacheKey, JSON.stringify(result.rows), 'EX', 120)
 
-    res.json(data || [])
+    res.json(result.rows)
 
   } catch (err) {
     console.error('History error:', err.message)
-
-    res.status(500).json({
-      error: 'Could not fetch history'
-    })
+    res.status(500).json({ error: 'Could not fetch history' })
   }
 }
-
 const detectVideo = async (req, res) => {
   try {
     const { url } = req.body
@@ -502,7 +493,7 @@ const detectVideo = async (req, res) => {
         try {
           const completion =
             await groq.chat.completions.create({
-              model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+              model: 'qwen/qwen3.6-27b',
               messages: [{
                 role: 'user',
                 content: [
@@ -524,7 +515,8 @@ const detectVideo = async (req, res) => {
                 ]
               }],
               temperature: 0.1,
-              max_tokens: 100
+              max_tokens: 100,
+               reasoning_effort: 'none', 
             })
 
           const parsed = parseAIResponse(
