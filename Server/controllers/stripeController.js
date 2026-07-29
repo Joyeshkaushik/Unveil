@@ -1,14 +1,13 @@
-const supabase = require('../Config/supabase')
+const pool = require('../Config/db')
 const { TIERS, getTierByPriceId } = require('../Config/pricing')
+const { invalidateUserTierCache } = require('../Config/redis')
 
-// Initialize Stripe only if API key is provided
 const stripe = process.env.STRIPE_SECRET_KEY
   ? require('stripe')(process.env.STRIPE_SECRET_KEY)
   : null
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://unveil-drab-chi.vercel.app'
 
-// Helper to check if Stripe is configured
 const requireStripe = (res) => {
   if (!stripe) {
     res.status(503).json({ error: 'Payments not configured. Add STRIPE_SECRET_KEY to enable.' })
@@ -17,14 +16,14 @@ const requireStripe = (res) => {
   return true
 }
 
-/**
- * Create a Stripe Checkout session for subscription
- */
+// ─────────────────────────────────────────
+// CREATE CHECKOUT SESSION
+// ─────────────────────────────────────────
 const createCheckout = async (req, res) => {
   if (!requireStripe(res)) return
 
   try {
-    const { priceId, interval = 'monthly' } = req.body
+    const { priceId } = req.body
     const userId = req.user.id
     const userEmail = req.user.email
 
@@ -32,18 +31,18 @@ const createCheckout = async (req, res) => {
       return res.status(400).json({ error: 'Price ID is required' })
     }
 
-    // Check if user already has an active subscription
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('stripe_customer_id, subscription_status')
-      .eq('id', userId)
-      .single()
+    // Check existing subscription
+    const result = await pool.query(
+      'SELECT stripe_customer_id, subscription_status FROM users WHERE id = $1',
+      [userId]
+    )
+    const profile = result.rows[0]
 
     if (profile?.subscription_status === 'active') {
       return res.status(400).json({ error: 'You already have an active subscription' })
     }
 
-    // Create or retrieve Stripe customer
+    // Create or reuse Stripe customer
     let customerId = profile?.stripe_customer_id
 
     if (!customerId) {
@@ -53,28 +52,23 @@ const createCheckout = async (req, res) => {
       })
       customerId = customer.id
 
-      // Save customer ID to profile
-      await supabase
-        .from('profiles')
-        .update({ stripe_customer_id: customerId })
-        .eq('id', userId)
+      // Save Stripe customer ID to DB
+      await pool.query(
+        'UPDATE users SET stripe_customer_id = $1, updated_at = NOW() WHERE id = $2',
+        [customerId, userId]
+      )
     }
 
-    // Create checkout session
+    // Create Stripe checkout session
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       payment_method_types: ['card'],
       mode: 'subscription',
-      line_items: [{
-        price: priceId,
-        quantity: 1
-      }],
+      line_items: [{ price: priceId, quantity: 1 }],
       success_url: `${FRONTEND_URL}/dashboard?checkout=success`,
       cancel_url: `${FRONTEND_URL}/pricing?checkout=cancelled`,
       metadata: { userId },
-      subscription_data: {
-        metadata: { userId }
-      }
+      subscription_data: { metadata: { userId } }
     })
 
     res.json({ url: session.url, sessionId: session.id })
@@ -84,20 +78,18 @@ const createCheckout = async (req, res) => {
   }
 }
 
-/**
- * Create a Stripe Customer Portal session for managing subscription
- */
+// ─────────────────────────────────────────
+// CREATE CUSTOMER PORTAL
+// ─────────────────────────────────────────
 const createPortal = async (req, res) => {
   if (!requireStripe(res)) return
 
   try {
-    const userId = req.user.id
-
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('stripe_customer_id')
-      .eq('id', userId)
-      .single()
+    const result = await pool.query(
+      'SELECT stripe_customer_id FROM users WHERE id = $1',
+      [req.user.id]
+    )
+    const profile = result.rows[0]
 
     if (!profile?.stripe_customer_id) {
       return res.status(400).json({ error: 'No subscription found' })
@@ -115,18 +107,17 @@ const createPortal = async (req, res) => {
   }
 }
 
-/**
- * Get current subscription status
- */
+// ─────────────────────────────────────────
+// GET SUBSCRIPTION
+// ─────────────────────────────────────────
 const getSubscription = async (req, res) => {
   try {
-    const userId = req.user.id
-
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('subscription_status, subscription_tier, subscription_ends_at')
-      .eq('id', userId)
-      .single()
+    const result = await pool.query(
+      `SELECT subscription_status, subscription_tier, subscription_ends_at
+       FROM users WHERE id = $1`,
+      [req.user.id]
+    )
+    const profile = result.rows[0]
 
     res.json({
       status: profile?.subscription_status || 'free',
@@ -140,22 +131,19 @@ const getSubscription = async (req, res) => {
   }
 }
 
-/**
- * Stripe webhook handler
- * Handles subscription lifecycle events
- */
+// ─────────────────────────────────────────
+// STRIPE WEBHOOK
+// ─────────────────────────────────────────
 const handleWebhook = async (req, res) => {
   if (!requireStripe(res)) return
 
   const sig = req.headers['stripe-signature']
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
-
   let event
 
   try {
-    event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret)
+    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET)
   } catch (err) {
-    console.error('Webhook signature verification failed:', err.message)
+    console.error('Webhook signature failed:', err.message)
     return res.status(400).json({ error: 'Invalid signature' })
   }
 
@@ -163,27 +151,26 @@ const handleWebhook = async (req, res) => {
 
   try {
     switch (event.type) {
+
       case 'checkout.session.completed': {
         const session = event.data.object
         const userId = session.metadata.userId
-        const subscriptionId = session.subscription
+        const subscription = await stripe.subscriptions.retrieve(session.subscription)
+        const tier = getTierByPriceId(subscription.items.data[0].price.id)
 
-        // Get subscription details
-        const subscription = await stripe.subscriptions.retrieve(subscriptionId)
-        const priceId = subscription.items.data[0].price.id
-        const tier = getTierByPriceId(priceId)
-
-        // Update user profile
-        await supabase
-          .from('profiles')
-          .update({
-            subscription_status: 'active',
-            subscription_tier: tier,
-            stripe_subscription_id: subscriptionId,
-            subscription_ends_at: new Date(subscription.current_period_end * 1000).toISOString()
-          })
-          .eq('id', userId)
-
+        await pool.query(
+          `UPDATE users SET
+            subscription_status = 'active',
+            subscription_tier = $1,
+            stripe_subscription_id = $2,
+            subscription_ends_at = $3,
+            updated_at = NOW()
+           WHERE id = $4`,
+          [tier, session.subscription,
+           new Date(subscription.current_period_end * 1000),
+           userId]
+        )
+        await invalidateUserTierCache(userId)
         console.log(`User ${userId} subscribed to ${tier}`)
         break
       }
@@ -191,21 +178,23 @@ const handleWebhook = async (req, res) => {
       case 'customer.subscription.updated': {
         const subscription = event.data.object
         const userId = subscription.metadata.userId
-
         if (!userId) break
 
-        const priceId = subscription.items.data[0].price.id
-        const tier = getTierByPriceId(priceId)
+        const tier = getTierByPriceId(subscription.items.data[0].price.id)
 
-        await supabase
-          .from('profiles')
-          .update({
-            subscription_status: subscription.status,
-            subscription_tier: subscription.status === 'active' ? tier : 'free',
-            subscription_ends_at: new Date(subscription.current_period_end * 1000).toISOString()
-          })
-          .eq('id', userId)
-
+        await pool.query(
+          `UPDATE users SET
+            subscription_status = $1,
+            subscription_tier = $2,
+            subscription_ends_at = $3,
+            updated_at = NOW()
+           WHERE id = $4`,
+          [subscription.status,
+           subscription.status === 'active' ? tier : 'free',
+           new Date(subscription.current_period_end * 1000),
+           userId]
+        )
+        await invalidateUserTierCache(userId)
         console.log(`User ${userId} subscription updated: ${subscription.status}`)
         break
       }
@@ -213,35 +202,30 @@ const handleWebhook = async (req, res) => {
       case 'customer.subscription.deleted': {
         const subscription = event.data.object
         const userId = subscription.metadata.userId
-
         if (!userId) break
 
-        await supabase
-          .from('profiles')
-          .update({
-            subscription_status: 'cancelled',
-            subscription_tier: 'free',
-            subscription_ends_at: null
-          })
-          .eq('id', userId)
-
+        await pool.query(
+          `UPDATE users SET
+            subscription_status = 'cancelled',
+            subscription_tier = 'free',
+            subscription_ends_at = NULL,
+            updated_at = NOW()
+           WHERE id = $1`,
+          [userId]
+        )
+        await invalidateUserTierCache(userId)
         console.log(`User ${userId} subscription cancelled`)
         break
       }
 
       case 'invoice.payment_failed': {
         const invoice = event.data.object
-        const customerId = invoice.customer
-
-        // Find user by customer ID
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('id, email')
-          .eq('stripe_customer_id', customerId)
-          .single()
-
-        if (profile) {
-          console.log(`Payment failed for user ${profile.id}`)
+        const result = await pool.query(
+          'SELECT id, email FROM users WHERE stripe_customer_id = $1',
+          [invoice.customer]
+        )
+        if (result.rows.length > 0) {
+          console.log(`Payment failed for user ${result.rows[0].id}`)
           // TODO: Send email notification
         }
         break
@@ -255,9 +239,4 @@ const handleWebhook = async (req, res) => {
   }
 }
 
-module.exports = {
-  createCheckout,
-  createPortal,
-  getSubscription,
-  handleWebhook
-}
+module.exports = { createCheckout, createPortal, getSubscription, handleWebhook }

@@ -1,7 +1,7 @@
-const supabase = require('../Config/supabase')
+const pool = require('../Config/db')
 const { TIERS } = require('../Config/pricing')
+const { invalidateUserTierCache } = require('../Config/redis')
 
-// Initialize Razorpay only if key is configured
 const Razorpay = require('razorpay')
 const razorpay = process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET
   ? new Razorpay({
@@ -10,9 +10,9 @@ const razorpay = process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET
     })
   : null
 
-/**
- * Initiate Razorpay subscription (or Mock fallback)
- */
+// ─────────────────────────────────────────
+// CREATE CHECKOUT
+// ─────────────────────────────────────────
 const createCheckout = async (req, res) => {
   try {
     const { priceId } = req.body
@@ -22,20 +22,20 @@ const createCheckout = async (req, res) => {
       return res.status(400).json({ error: 'Plan/Price ID is required' })
     }
 
-    // Check if user already has an active subscription
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('subscription_status')
-      .eq('id', userId)
-      .single()
+    // Check existing subscription
+    const result = await pool.query(
+      'SELECT subscription_status FROM users WHERE id = $1',
+      [userId]
+    )
+    const profile = result.rows[0]
 
     if (profile?.subscription_status === 'active') {
       return res.status(400).json({ error: 'You already have an active subscription' })
     }
 
-    // 1. Sandbox/Mock Checkout Mode (if API key is missing)
+    // Mock mode if Razorpay not configured
     if (!razorpay) {
-      console.log('Razorpay keys not configured. Falling back to Sandbox Mode.')
+      console.log('Razorpay not configured — using sandbox mode')
       return res.json({
         keyId: 'rzp_test_mock_sandbox',
         subscriptionId: 'sub_mock_' + Math.random().toString(36).substring(2, 15),
@@ -43,19 +43,16 @@ const createCheckout = async (req, res) => {
       })
     }
 
-    // 2. Real Razorpay Mode
-    // Map pricing ID to Razorpay Plan ID
-    const planId = priceId === TIERS.pro.stripePriceIdYearly 
-      ? TIERS.pro.razorpayPlanIdYearly 
+    // Real Razorpay
+    const planId = priceId === TIERS.pro.stripePriceIdYearly
+      ? TIERS.pro.razorpayPlanIdYearly
       : TIERS.pro.razorpayPlanIdMonthly
 
     const subscription = await razorpay.subscriptions.create({
       plan_id: planId,
       customer_notify: 1,
-      total_count: 12, // default 12 billing cycles
-      notes: {
-        userId: userId
-      }
+      total_count: 12,
+      notes: { userId }
     })
 
     res.json({
@@ -69,9 +66,9 @@ const createCheckout = async (req, res) => {
   }
 }
 
-/**
- * Verify Razorpay Subscription Payment signature
- */
+// ─────────────────────────────────────────
+// VERIFY PAYMENT
+// ─────────────────────────────────────────
 const verifyPayment = async (req, res) => {
   try {
     const { razorpay_payment_id, razorpay_subscription_id, razorpay_signature } = req.body
@@ -81,22 +78,25 @@ const verifyPayment = async (req, res) => {
       return res.status(400).json({ error: 'Subscription ID is required' })
     }
 
-    // 1. Mock Sandbox Verification
+    // Mock sandbox verification
     if (razorpay_subscription_id.startsWith('sub_mock_')) {
-      await supabase
-        .from('profiles')
-        .update({
-          subscription_status: 'active',
-          subscription_tier: 'pro',
-          stripe_subscription_id: razorpay_subscription_id, // reuse subscription id column
-          subscription_ends_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-        })
-        .eq('id', userId)
-
-      return res.json({ success: true, message: 'Mock payment verified successfully!' })
+      await pool.query(
+        `UPDATE users SET
+          subscription_status = 'active',
+          subscription_tier = 'pro',
+          stripe_subscription_id = $1,
+          subscription_ends_at = $2,
+          updated_at = NOW()
+         WHERE id = $3`,
+        [razorpay_subscription_id,
+         new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+         userId]
+      )
+      await invalidateUserTierCache(userId)
+      return res.json({ success: true, message: 'Mock payment verified!' })
     }
 
-    // 2. Real Razorpay Verification
+    // Real Razorpay signature verification
     if (!razorpay) {
       return res.status(503).json({ error: 'Payment keys missing on server.' })
     }
@@ -115,87 +115,87 @@ const verifyPayment = async (req, res) => {
       return res.status(400).json({ error: 'Payment signature verification failed' })
     }
 
-    // Update profile
-    await supabase
-      .from('profiles')
-      .update({
-        subscription_status: 'active',
-        subscription_tier: 'pro',
-        stripe_subscription_id: razorpay_subscription_id,
-        subscription_ends_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-      })
-      .eq('id', userId)
+    await pool.query(
+      `UPDATE users SET
+        subscription_status = 'active',
+        subscription_tier = 'pro',
+        stripe_subscription_id = $1,
+        subscription_ends_at = $2,
+        updated_at = NOW()
+       WHERE id = $3`,
+      [razorpay_subscription_id,
+       new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+       userId]
+    )
+    await invalidateUserTierCache(userId)
 
     res.json({ success: true, message: 'Payment verified and subscription activated!' })
   } catch (err) {
-    console.error('Razorpay signature verification error:', err.message)
+    console.error('Razorpay verification error:', err.message)
     res.status(500).json({ error: 'Verification failed' })
   }
 }
 
-/**
- * Cancel active subscription
- */
+// ─────────────────────────────────────────
+// CANCEL SUBSCRIPTION
+// ─────────────────────────────────────────
 const cancelSubscription = async (req, res) => {
   try {
     const userId = req.user.id
 
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('stripe_subscription_id')
-      .eq('id', userId)
-      .single()
-
-    const subscriptionId = profile?.stripe_subscription_id
+    const result = await pool.query(
+      'SELECT stripe_subscription_id FROM users WHERE id = $1',
+      [userId]
+    )
+    const subscriptionId = result.rows[0]?.stripe_subscription_id
 
     if (!subscriptionId) {
       return res.status(400).json({ error: 'No active subscription found' })
     }
 
-    // Call Razorpay API to cancel if real, otherwise skip
+    // Cancel on Razorpay if real subscription
     if (razorpay && !subscriptionId.startsWith('sub_mock_')) {
       try {
         await razorpay.subscriptions.cancel(subscriptionId)
       } catch (rzpErr) {
-        console.error('Razorpay API cancel warning:', rzpErr.message)
+        console.error('Razorpay cancel warning:', rzpErr.message)
       }
     }
 
-    // Cancel in profiles table
-    await supabase
-      .from('profiles')
-      .update({
-        subscription_status: 'cancelled',
-        subscription_tier: 'free',
-        subscription_ends_at: null
-      })
-      .eq('id', userId)
+    await pool.query(
+      `UPDATE users SET
+        subscription_status = 'cancelled',
+        subscription_tier = 'free',
+        subscription_ends_at = NULL,
+        updated_at = NOW()
+       WHERE id = $1`,
+      [userId]
+    )
+    await invalidateUserTierCache(userId)
 
     res.json({ success: true, message: 'Subscription successfully cancelled.' })
   } catch (err) {
-    console.error('Subscription cancellation error:', err.message)
+    console.error('Cancel subscription error:', err.message)
     res.status(500).json({ error: 'Failed to cancel subscription' })
   }
 }
 
-/**
- * Get active subscription details and limits
- */
+// ─────────────────────────────────────────
+// GET SUBSCRIPTION
+// ─────────────────────────────────────────
 const getSubscription = async (req, res) => {
   try {
-    const userId = req.user.id
-
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('subscription_status, subscription_tier, subscription_ends_at')
-      .eq('id', userId)
-      .single()
-
+    const result = await pool.query(
+      `SELECT subscription_status, subscription_tier, subscription_ends_at
+       FROM users WHERE id = $1`,
+      [req.user.id]
+    )
+    const profile = result.rows[0]
     const tier = profile?.subscription_tier || 'free'
 
     res.json({
       status: profile?.subscription_status || 'free',
-      tier: tier,
+      tier,
       endsAt: profile?.subscription_ends_at,
       limits: TIERS[tier]?.limits || TIERS.free.limits
     })
@@ -205,9 +205,4 @@ const getSubscription = async (req, res) => {
   }
 }
 
-module.exports = {
-  createCheckout,
-  verifyPayment,
-  cancelSubscription,
-  getSubscription
-}
+module.exports = { createCheckout, verifyPayment, cancelSubscription, getSubscription }
