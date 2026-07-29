@@ -1,5 +1,6 @@
 const supabase = require('../Config/supabase')
 const {redis}=require('../Config/redis')
+const pool=require('../Config/db')
 
 async function saveScan({
   userId,
@@ -9,17 +10,13 @@ async function saveScan({
   confidence
 }) {
   try {
-    const { error } = await supabase.from('scans').insert({
-      user_id: userId,
-      type,
-      input_preview: inputPreview,
-      result,
-      confidence: confidence / 100
-    })
+    await pool.query(
+      `INSERT INTO scans (user_id, type, input_preview, result, confidence)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [userId, type, inputPreview, result, confidence / 100]
+    )
 
-    if (error) {
-      console.error('Save scan error:', error.message)
-    }
+    
       // INVALIDATE history cache — user has a new scan now
     await redis.del(`history:${userId}`)
     console.log(`Cache invalidated for user ${userId}`)

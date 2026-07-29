@@ -2,6 +2,7 @@ const express = require('express')
 const cors = require('cors')
 require('dotenv').config()
 const {redis}=require('./Config/redis')
+const pool=require('./Config/db')
 
 const authRoutes = require('./routes/authRoutes')
 const detectRoutes = require('./routes/detectRoutes')
@@ -49,4 +50,9 @@ const supabase = require('./Config/supabase')
 supabase.from('profiles').select('count').then(({data, error}) => {
   if (error) console.log('❌ Supabase error:', error.message)
   else console.log('✅ Supabase connected!')
+})
+pool.query('SELECT NOW()').then(() => {
+  console.log('✅ PostgreSQL connected!')
+}).catch(err => {
+  console.log('❌ PostgreSQL error:', err.message)
 })

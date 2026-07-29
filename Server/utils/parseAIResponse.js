@@ -1,7 +1,8 @@
 function parseAIResponse(rawText) {
   try {
     if (!rawText) return null
-
+    
+     
     // Extract JSON content between the first '{' and the last '}'
     const firstBrace = rawText.indexOf('{')
     const lastBrace = rawText.lastIndexOf('}')
@@ -10,7 +11,7 @@ function parseAIResponse(rawText) {
       const jsonContent = rawText.substring(firstBrace, lastBrace + 1)
       return JSON.parse(jsonContent)
     }
-
+  
     const cleaned = rawText
       .replace(/```json/g, '')
       .replace(/```/g, '')
