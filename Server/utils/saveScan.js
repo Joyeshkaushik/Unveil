@@ -1,4 +1,4 @@
-const supabase = require('../Config/supabase')
+
 const {redis}=require('../Config/redis')
 const pool=require('../Config/db')
 

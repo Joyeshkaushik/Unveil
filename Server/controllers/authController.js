@@ -1,4 +1,4 @@
-const supabase = require('../Config/supabase')
+
 const pool=require('../Config/db')
 const bycrypt=require('bcryptjs')
 const jwt = require('jsonwebtoken')

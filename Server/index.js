@@ -44,13 +44,10 @@ app.listen(PORT, () => {
   console.log(`✅ Server running on port ${PORT}`)
 })
 
-const supabase = require('./Config/supabase')
+
 
 // Add this temporarily after app is created
-supabase.from('profiles').select('count').then(({data, error}) => {
-  if (error) console.log('❌ Supabase error:', error.message)
-  else console.log('✅ Supabase connected!')
-})
+
 pool.query('SELECT NOW()').then(() => {
   console.log('✅ PostgreSQL connected!')
 }).catch(err => {
